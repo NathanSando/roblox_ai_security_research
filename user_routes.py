@@ -14,6 +14,7 @@ def get_users():
     return {
         "users": [
             {
+                "roblox_id": user.roblox_id,
                 "name": user.name,
                 "id": user.id,
                 "is_admin": user.is_admin,
@@ -22,36 +23,6 @@ def get_users():
             for user in users
         ]
     }
-
-# Adds a user to the database.
-@users_bp.route("/users", methods=["POST"])
-def add_user():
-
-    data = request.get_json(silent=True)
-    name = data.get("name")
-
-    if not name:
-        return {"error": "Name is missing"}, 400
-
-    user = User(name=name)
-
-    db.session.add(user)
-    db.session.commit()
-
-    users = User.query.all()
-
-    return {
-        "message": "User created successfully! Here is the current user list:",
-        "user": [
-            {
-                "name": user.name,
-                "id": user.id,
-                "is_admin": user.is_admin,
-                "is_sus": user.is_sus
-            }
-            for user in users
-        ]
-    }, 201
 
 # Deletes a user from the database.
 @users_bp.route("/users", methods=["DELETE"])

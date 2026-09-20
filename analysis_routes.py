@@ -15,7 +15,7 @@ def feed_data():
     # Create the user data file only when it is missing.
     if not Path("user_data.json").exists():
         users = User.query.all()
-        data = [{"user": user.name, "id": user.id} for user in users]
+        data = [{"roblox_id": user.roblox_id, "user": user.name, "id": user.id} for user in users]
         export_data(data)
 
     # Ask to evalute.

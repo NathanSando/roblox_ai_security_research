@@ -8,6 +8,7 @@ from data_import import import_bp
 
 def create_app(config=None):
     app = Flask(__name__)
+    app.json.sort_keys = False
     app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///app.db"
     if config is not None:
         app.config.update(config)
