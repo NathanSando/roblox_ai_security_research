@@ -2,9 +2,9 @@ from pathlib import Path
 
 from flask import Blueprint
 
-from ai_client import ollama_read
-from data_export import export_data
-from models import User
+from backend.ai_client import ollama_read
+from backend.player_monitoring.data_export import export_data
+from backend.player_monitoring.models import User
 
 analysis_bp = Blueprint("analysis", __name__)
 

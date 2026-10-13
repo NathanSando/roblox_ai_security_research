@@ -1,10 +1,9 @@
 from flask import Blueprint, request
-from database import db
-from models import User
+from backend.database import db
+from backend.player_monitoring.models import User
 import requests
 
 import_bp = Blueprint("data_import", __name__)
-
 
 def verify_roblox_account(user_id):
     try:
@@ -32,7 +31,6 @@ def add_user(roblox_id, name):
     db.session.add(user)
     db.session.commit()
     return user
-
 
 @import_bp.route("/import", methods=["POST"])
 def import_data():

@@ -1,0 +1,11 @@
+{
+  "name": "Reye Development",
+  "tree": {
+    "$className": "DataModel",
+    "ServerStorage": {
+      "$className": "ServerStorage",
+      "$ignoreUnknownInstances": true,
+      "Reye": { "$path": "src" }
+    }
+  }
+}

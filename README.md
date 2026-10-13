@@ -45,3 +45,17 @@ The project aims to collect only the data needed for analysis and restrict acces
 ## Project Status
 
 Early research and development. Features described above are planned and may change as the project evolves.
+
+## Project Layout
+
+- `reye_plugin/`: Reye Studio plugin, script collection, UI, and Rojo configuration.
+- `backend/`: Python app entry point, shared database setup, and AI client.
+- `backend/player_monitoring/`: Player models, routes, imports, exports, and analysis.
+- `backend/script_scanning/`: Scan API route that sends collected scripts for AI review.
+- `instance/`: Existing local database, kept in its original location.
+
+With the virtual environment activated, run from the repository root:
+
+```powershell
+python -m backend.datainterpreter
+```
