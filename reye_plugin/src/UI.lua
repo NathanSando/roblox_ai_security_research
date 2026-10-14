@@ -1,4 +1,5 @@
 local UI = {}
+local RunService = game:GetService("RunService")
 
 local ScriptScanner = require(script.Parent.ScriptScanner)
 local AnalysisClient = require(script.Parent.AnalysisClient)
@@ -72,9 +73,20 @@ function UI.create(plugin)
     corner.CornerRadius = UDim.new(0, 8)
     corner.Parent = scan
 
-    local status = label("Scanning is not connected yet. No scripts have been read or changed.", 13, Color3.fromRGB(190, 177, 208), 6)
+    local status = label("Scanning has not been commenced yet. No scripts have been read or changed.", 13, Color3.fromRGB(190, 177, 208), 6)
 
+    local elapsed = label("", 13, Color3.fromRGB(255, 255, 255), 7)
+    elapsed.Visible = false
+    local timerConnection
     local isScanning = false
+
+    -- Stop updating the label if Studio unloads this plugin.
+    plugin.Unloading:Connect(function()
+        if timerConnection then
+            timerConnection:Disconnect()
+            timerConnection = nil
+        end
+    end)
 
     scan.Activated:Connect(function()
 
@@ -85,6 +97,23 @@ function UI.create(plugin)
         isScanning = true
         scan.Text = "Scanning in process..."
         status.Text = "Collecting scripts..."
+
+        local startedAt = os.clock()
+        elapsed.Visible = true
+        elapsed.Text = "Elapsed: 0 seconds"
+        elapsed.TextColor3 = Color3.fromRGB(255, 255, 255)
+
+        -- Update independently while the HTTP request waits for the AI.
+        timerConnection = RunService.Heartbeat:Connect(function()
+            local seconds = os.clock() - startedAt
+            elapsed.Text = string.format("Elapsed: %d seconds", math.floor(seconds))
+
+            -- Smoothly pulse from white to lavender and back every 3 seconds.
+            local blend = (1 - math.cos(seconds * math.pi * 2 / 3)) / 2
+            elapsed.TextColor3 = Color3.fromRGB(255, 255, 255):Lerp(
+                Color3.fromRGB(192, 155, 255), blend
+            )
+        end)
 
         -- Monitor the function that sends and retrieves.
         local success, errorMessage = pcall(function()
@@ -111,20 +140,29 @@ function UI.create(plugin)
 
         end)
 
+        -- Keep the final elapsed time, but stop the timer and pulse.
+        if timerConnection then
+            timerConnection:Disconnect()
+            timerConnection = nil
+        end
+
+        elapsed.Text = string.format("Elapsed: %.1f seconds", os.clock() - startedAt)
+        elapsed.TextColor3 = Color3.fromRGB(190, 177, 208)
+
         -- Allow another scan after either success or failure.
         isScanning = false
         scan.Text = "Scan Scripts"
 
         if not success then
-            status.Text = "Review failed. Check output for details."
+            status.Text = "Review failed: " .. tostring(errorMessage)
             warn(errorMessage)
         end
 
 
     end)
 
-    label("PLAYER MONITORING", 12, Color3.fromRGB(192, 155, 255), 7)
-    label("Optional module — coming later. Nothing is installed in your game.", 13, Color3.fromRGB(190, 177, 208), 8)
+    label("PLAYER MONITORING", 12, Color3.fromRGB(192, 155, 255), 8)
+    label("Optional module — coming later. Nothing is installed in your game.", 13, Color3.fromRGB(190, 177, 208), 9)
 
     return panel
 
