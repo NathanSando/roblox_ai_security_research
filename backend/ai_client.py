@@ -122,6 +122,7 @@ Use real values, not the explanatory placeholders above.
     )
 
     # Turn the model's JSON text into a dictionary Flask can return.
+    print("Raw AI report:", response.message.content)
     report = json.loads(response.message.content)
 
     if not isinstance(report, dict):
