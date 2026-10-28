@@ -1,38 +1,33 @@
 import json
-from ollama import chat, AsyncClient
+from contextlib import aclosing
+from ollama import AsyncClient
 
-def ollama_ask(prompt: str, model: str = "qwen2.5-coder:7b"):
+async def _chat_text(model, messages, **options):
+    # Close both resources on completion, errors, or task cancellation.
+    async with AsyncClient() as client:
+        stream = await client.chat(
+            model=model, messages=messages, stream=True, **options
+        )
+        chunks = []
+        async with aclosing(stream):
+            async for chunk in stream:
+                chunks.append(chunk.message.content or "")
+        return "".join(chunks)
 
-    response = chat(
-        model = model,
-        messages = [
-            {
-                "role": "user", "content": prompt
-            }
-        ]
+
+async def ollama_ask(prompt: str, model: str = "qwen2.5-coder:7b"):
+    return await _chat_text(model, [{"role": "user", "content": prompt}])
+
+
+async def ollama_read(file: str, prompt: str, model: str = "qwen2.5-coder:7b"):
+    with open(file, "r", encoding="utf-8") as source:
+        contents = source.read()
+    return await ollama_ask(
+        f"Look at this file: {contents}. After reading the data, respond based on this prompt: {prompt}",
+        model,
     )
 
-    # Get the response
-    return response.message.content
-
-def ollama_read(file: str, prompt: str, model: str = "qwen2.5-coder:7b"):
-
-    with open(file, "r", encoding="utf-8") as file:
-        contents = file.read()
-
-    response = chat(
-        model = model,
-        messages = [
-            {
-                "role": "user", "content": f"Look at this file: {contents}. After reading the data, respond based on this prompt: {prompt}"
-            }
-        ]
-    )
-
-    # Get the response
-    return response.message.content
-
-def ollama_review(scripts: list, model: str = "qwen2.5-coder:7b"):
+async def ollama_review(scripts: list, model: str = "qwen2.5-coder:7b"):
     """Review the full collected script list together and return a report dictionary."""
     instructions = """
 You are Reye, a security reviewer for Roblox/Luau games. Review the supplied
@@ -193,7 +188,7 @@ Use an empty scripts list for an event-only step or unresolved code; never inven
         "additionalProperties": False,
     }
 
-    response = chat(
+    response = await _chat_text(
         model=model,
         messages=[
             {"role": "system", "content": instructions + "\nRequired JSON schema:\n" + json.dumps(report_schema)},
@@ -204,7 +199,7 @@ Use an empty scripts list for an event-only step or unresolved code; never inven
     )
 
     # Turn the model's JSON text into a dictionary Flask can return.
-    report = json.loads(response.message.content)
+    report = json.loads(response)
 
     if not isinstance(report, dict):
         raise ValueError("AI report must be a JSON object.")

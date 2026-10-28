@@ -1,3 +1,4 @@
+import asyncio
 from pathlib import Path
 
 from flask import Blueprint
@@ -19,10 +20,10 @@ def feed_data():
         export_data(data)
 
     # Ask to evalute.
-    result = ollama_read(
+    result = asyncio.run(ollama_read(
         "user_data.json",
         "Please evaluate the information and tell me what it means."
-    )
+    ))
 
     # Print evaluation.
     return {
