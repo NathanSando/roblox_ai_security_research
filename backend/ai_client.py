@@ -52,7 +52,7 @@ REVIEW PROCESS
    control and what server action this could cause.
 3. Search the supplied callers and callees for validation BEFORE reporting a
    missing check. Credit effective checks in other scripts. A helper lacking
-   validation is not automatically vulnerable if its callers enforce it.
+   validation is not automatically vulnerable if trusted server callers enforce it.
 4. Review type and value bounds, non-finite numbers where relevant, ownership,
    authorization, server-side price/reward calculations, action eligibility,
    distance/state checks, server-side rate limits, repeat/replay handling, and
@@ -60,6 +60,32 @@ REVIEW PROCESS
 5. Consider client-controlled movement/physics where it affects server trust,
    dynamic code or asset loading, and secrets exposed to clients only when
    the supplied code supports a meaningful security impact.
+
+SERVER TRUST AND REASONING
+- Treat client code as attacker-controlled. Client checks and task.wait() delays
+  can be bypassed; they do not authorize a server action or enforce a server limit.
+  Do not blame missing LocalScript validation for a server trust vulnerability.
+  Locate the server handler or server module that accepts the untrusted input.
+- Separate input validity from permission: a correctly typed, in-range value can
+  still cause unauthorized healing, rewards, or purchases. Ask whether the server
+  verifies eligibility and computes authoritative outcomes from server-owned data.
+- OnServerEvent's first Player argument identifies the caller; later arguments
+  are client-controlled. Using player.Character restricts the target to that
+  caller, but does not itself authorize changes to that character. Do not inflate
+  an own-character exploit into control over other players without evidence.
+- Trace omitted arguments as nil. Describe resulting assignment/type errors as
+  runtime bugs, not automatic proof of a server-wide crash or denial of service.
+  Keep incidental bugs separate from the main security cause; mention them in
+  system_overview unless an attacker-controlled security impact is demonstrated.
+- For example, if a server assigns a remote argument directly to Health and
+  MaxHealth, the issue is server trust in a client-chosen outcome. Adding only
+  client validation or a server numeric clamp does not prevent unauthorized
+  repeated healing. Recommend a request for an action whose eligibility, amount,
+  and repeat limits are decided by the server. Apply this example ONLY when the
+  supplied code contains this behavior; do not invent health findings elsewhere.
+- Before returning, check summary, explanation, and recommendation agree about
+  the root cause, affected player/state, and server-side fix. State actual impact
+  supported by code, distinguish assumptions, and avoid blaming client-side gaps.
 
 ACCURACY RULES
 - A remote's existence, a client-side check, or a missing cooldown alone is
@@ -97,7 +123,7 @@ Return ONLY a JSON object with this structure:
       "status": "potential_issue",
       "scripts": ["exact supplied path"],
       "evidence": [{"path": "exact supplied path", "excerpt": "exact code"}],
-      "flow": ["entry point", "relevant calls/checks", "sensitive action"],
+      "flow": [{"description": "One step in the interaction", "scripts": ["exact supplied path responsible for this step"]}],
       "preconditions": "Required access, state, and assumptions",
       "explanation": "Why the existing defenses permit this path",
       "impact": "Concrete plausible outcome",
@@ -109,15 +135,71 @@ Return ONLY a JSON object with this structure:
   "open_questions": ["Questions needed to assess uncertain concerns"]
 }
 Use real values, not the explanatory placeholders above.
+For each flow step, list only exact supplied script paths responsible for that step.
+Use an empty scripts list for an event-only step or unresolved code; never invent a path.
 """
+
+    # Define the fields Ollama must return, including each finding's structure.
+    text_field = {"type": "string"}
+    text_list = {"type": "array", "items": text_field}
+    finding_fields = {
+        "title": text_field,
+        "severity": {"type": "string", "enum": ["high", "medium", "low"]},
+        "confidence": {"type": "string", "enum": ["high", "medium", "low"]},
+        "status": {"type": "string", "enum": ["potential_issue"]},
+        "scripts": text_list,
+        "evidence": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {"path": text_field, "excerpt": text_field},
+                "required": ["path", "excerpt"],
+                "additionalProperties": False,
+            },
+        },
+        "flow": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {"description": text_field, "scripts": text_list},
+                "required": ["description", "scripts"],
+                "additionalProperties": False,
+            },
+        },
+        "preconditions": text_field,
+        "explanation": text_field,
+        "impact": text_field,
+        "recommendation": text_field,
+        "validation_test": text_field,
+    }
+    report_schema = {
+        "type": "object",
+        "properties": {
+            "summary": text_field,
+            "system_overview": text_field,
+            "findings": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": finding_fields,
+                    "required": list(finding_fields),
+                    "additionalProperties": False,
+                },
+            },
+            "limitations": text_list,
+            "open_questions": text_list,
+        },
+        "required": ["summary", "system_overview", "findings", "limitations", "open_questions"],
+        "additionalProperties": False,
+    }
 
     response = chat(
         model=model,
         messages=[
-            {"role": "system", "content": instructions},
+            {"role": "system", "content": instructions + "\nRequired JSON schema:\n" + json.dumps(report_schema)},
             {"role": "user", "content": json.dumps({"scripts": scripts})},
         ],
-        format="json",
+        format=report_schema,
         options={"temperature": 0},
     )
 
