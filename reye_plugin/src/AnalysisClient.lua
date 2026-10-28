@@ -19,8 +19,33 @@ local function removeScan(scanId)
     end
 end
 
+-- Queue cancellation so it cannot race with a polling request or cleanup.
+function AnalysisClient.cancelScan(scan)
+    scan.cancelRequested = true
+    scan.cancelError = nil
+end
+
+local function cancelRequest(scanId)
+    local response = HttpService:RequestAsync({
+        Url = "http://127.0.0.1:5000/scan/" .. scanId .. "/cancel",
+        Method = "POST"
+    })
+    if response.StatusCode == 409 then
+        return false -- Already finished; retrieve the result normally.
+    end
+    if not response.Success then
+        error("Could not cancel scan: " .. response.StatusCode)
+    end
+    local removed, cleanupError = pcall(removeScan, scanId)
+    if not removed then
+        warn(cleanupError)
+    end
+    return true
+end
+
 -- Send the JSON into the backend for findings from AI.
-function AnalysisClient.getFindings(json)
+function AnalysisClient.getFindings(json, scan)
+    scan = scan or {}
 
     -- Make a request to get the report.
     local response = HttpService:RequestAsync({
@@ -49,6 +74,16 @@ function AnalysisClient.getFindings(json)
     -- This does polling for the response to avoid connection time out.
     while true do
 
+        if scan.cancelRequested then
+            local ok, cancelled = pcall(cancelRequest, scanId)
+            scan.cancelRequested = false
+            if ok and cancelled then
+                return nil, "cancelled"
+            elseif not ok then
+                scan.cancelError = tostring(cancelled)
+            end
+        end
+
         -- If it is taking too long then error.
         if os.clock() - startedAt >= 600 then
             error("Stopped waiting after 10 minutes. The backend may still be reviewing.")
@@ -71,14 +106,16 @@ function AnalysisClient.getFindings(json)
         local result = HttpService:JSONDecode(response.Body)
 
         -- Check the status of the results.
-        if result.status == "completed" or result.status == "failed" then
+        if result.status == "completed" or result.status == "failed" or result.status == "cancelled" then
             local removed, cleanupError = pcall(removeScan, scanId)
 
             if not removed then
                 warn(cleanupError)
             end
 
-            if result.status == "completed" then
+            if result.status == "cancelled" then
+                return nil, "cancelled"
+            elseif result.status == "completed" then
                 return result.report
             else
                 error(result.error)

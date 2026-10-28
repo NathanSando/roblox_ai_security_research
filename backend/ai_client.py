@@ -1,5 +1,5 @@
 import json
-from ollama import chat
+from ollama import chat, AsyncClient
 
 def ollama_ask(prompt: str, model: str = "qwen2.5-coder:7b"):
 
@@ -204,7 +204,6 @@ Use an empty scripts list for an event-only step or unresolved code; never inven
     )
 
     # Turn the model's JSON text into a dictionary Flask can return.
-    print("Raw AI report:", response.message.content)
     report = json.loads(response.message.content)
 
     if not isinstance(report, dict):

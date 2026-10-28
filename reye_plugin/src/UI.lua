@@ -132,12 +132,34 @@ function UI.create(plugin)
     corner.CornerRadius = UDim.new(0, 8)
     corner.Parent = scan
 
-    local status = label("Scanning has not been commenced yet.", 6, reviewContent)
+    local status = label("Scanning has not been commenced yet.", 7, reviewContent)
 
-    local elapsed = label("", 7, reviewContent)
+    local elapsed = label("", 8, reviewContent)
     elapsed.Visible = false
     local timerConnection
     local isScanning = false
+    local activeScan
+
+    local cancel = Instance.new("TextButton")
+    cancel.Size = UDim2.new(1, 0, 0, 36)
+    cancel.BackgroundColor3 = Color3.fromRGB(36, 38, 41)
+    cancel.BorderSizePixel = 0
+    cancel.Text = "Cancel Scan"
+    cancel.TextColor3 = Color3.fromRGB(255, 110, 110)
+    cancel.TextSize = 16
+    cancel.Font = Enum.Font.GothamBold
+    cancel.LayoutOrder = 6
+    cancel.Visible = false
+    cancel.Parent = reviewContent
+    local cancelCorner = Instance.new("UICorner")
+    cancelCorner.CornerRadius = UDim.new(0, 8)
+    cancelCorner.Parent = cancel
+    cancel.Activated:Connect(function()
+        if activeScan and not activeScan.cancelRequested then
+            AnalysisClient.cancelScan(activeScan)
+            cancel.Text = "Cancelling..."
+        end
+    end)
 
     local reopen = Instance.new("TextButton")
     reopen.Size = UDim2.new(1, 0, 0, 36)
@@ -147,7 +169,7 @@ function UI.create(plugin)
     reopen.TextColor3 = Color3.fromRGB(212, 233, 232)
     reopen.Font = Enum.Font.GothamMedium
     reopen.TextSize = 16
-    reopen.LayoutOrder = 8
+    reopen.LayoutOrder = 9
     reopen.Visible = false
     reopen.Parent = reviewContent
     local reopenCorner = Instance.new("UICorner")
@@ -170,6 +192,9 @@ function UI.create(plugin)
         end
 
         isScanning = true
+        activeScan = {}
+        cancel.Visible = true
+        cancel.Text = "Cancel Scan"
         scan.Text = "Reviewing scripts"
         scanStripe.BackgroundColor3 = Color3.fromRGB(255, 110, 110)
         scan.TextColor3 = scanStripe.BackgroundColor3
@@ -187,7 +212,12 @@ function UI.create(plugin)
 
             -- Cycle zero to three dots while gently pulsing the red stripe.
             local dots = string.rep(".", math.floor(seconds * 2) % 4)
-            scan.Text = "Reviewing scripts" .. dots
+            scan.Text = (activeScan.cancelRequested and "Stopping scan" or "Reviewing scripts") .. dots
+            cancel.Text = activeScan.cancelRequested and "Cancelling..." or "Cancel Scan"
+            if activeScan.cancelError then
+                status.Visible = true
+                status.Text = activeScan.cancelError .. ". Review is still active; you can retry cancellation."
+            end
             local blend = (1 - math.cos(seconds * math.pi * 2 / 3)) / 2
             scanStripe.BackgroundColor3 = Color3.fromRGB(220, 80, 80):Lerp(
                 Color3.fromRGB(255, 145, 145), blend
@@ -209,7 +239,11 @@ function UI.create(plugin)
             local json = AnalysisClient.toJSON(scripts)
 
             -- Send the JSON to the AI and get the report.
-            local report = AnalysisClient.getFindings(json)
+            local report, outcome = AnalysisClient.getFindings(json, activeScan)
+            if outcome == "cancelled" then
+                status.Text = "Review cancelled."
+                return
+            end
             results.show(report)
             reopen.Visible = true
             status.Text = "Review complete. See Reye Results."
@@ -228,6 +262,8 @@ function UI.create(plugin)
         -- Allow another scan after either success or failure.
         status.Visible = true
         isScanning = false
+        activeScan = nil
+        cancel.Visible = false
         scan.Text = "Review Scripts"
         scanStripe.BackgroundColor3 = Color3.fromRGB(95, 205, 130)
         scan.TextColor3 = scanStripe.BackgroundColor3
